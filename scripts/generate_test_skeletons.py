@@ -1,48 +1,65 @@
 import os
 import ast
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
-# Load .env file for local testing
-load_dotenv()
+# Robust loading of .env from the project root
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+env_path = os.path.join(project_root, ".env")
+load_dotenv(dotenv_path=env_path)
 
-# Setup Gemini API
+# Setup Gemini API using the NEW SDK (google-genai)
 API_KEY = os.environ.get("GOOGLE_API_KEY")
+client = None
+
 if API_KEY:
-    genai.configure(api_key=API_KEY)
+    try:
+        client = genai.Client(api_key=API_KEY)
+        print(f"DEBUG: Gemini Client initialisiert (Key-Endung: {API_KEY[-4:]})")
+    except Exception as e:
+        print(f"Fehler bei der Initialisierung: {e}")
 else:
-    print("Warnung: Kein GOOGLE_API_KEY in der Umgebung oder .env gefunden!")
+    print("Warnung: Kein GOOGLE_API_KEY gefunden!")
 
 def get_ai_test_code(module_name, function_name, source_code):
-    if not API_KEY:
-        return f"def test_{function_name}():\n    # TODO: Implement test for {function_name}\n    pass\n\n"
+    if not client:
+        return f"def test_{function_name}():\n    # TODO: Implement test (Client/API Key missing)\n    pass\n\n"
 
     try:
-        # We try to use gemini-1.5-flash which is the most common one
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = f"Schreibe einen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'. Code:\n{source_code}\nAntworte NUR mit dem reinen Python-Code der Testfunktion."
+        # We'll use 2.0-flash as it's state-of-the-art and was in your debug list
+        # Fallback to 1.5-flash if needed
+        model_name = 'gemini-2.0-flash'
         
-        response = model.generate_content(prompt)
+        prompt = f"""
+        Schreibe einen professionellen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'.
+        Hier ist der Quellcode des Moduls:
+        ```python
+        {source_code}
+        ```
+        Regeln:
+        1. Antworte NUR mit dem reinen Python-Code der Testfunktion. Keine Erklärungen.
+        2. Verwende 'from src import {module_name}' am Anfang oder gehe davon aus, dass der Import bereits existiert.
+        3. Nutze aussagekräftige 'assert' Statements.
+        """
+        
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
         test_code = response.text.strip()
         
-        # Clean up code blocks
+        # Clean up markdown if AI includes it
         if "```" in test_code:
-            test_code = test_code.split("```")
-            for part in test_code:
-                if part.strip().startswith("python"):
-                    test_code = part.replace("python", "", 1).strip()
-                    break
-            else:
-                test_code = test_code[1].strip() if len(test_code) > 1 else test_code[0].strip()
-        
+            test_code = test_code.split("```python")[-1].split("```")[0].strip()
         return test_code + "\n\n"
     except Exception as e:
         print(f"AI Generation failed for {function_name}: {e}")
-        return f"def test_{function_name}():\n    # AI failed: {e}\n    pass\n\n"
+        return f"def test_{function_name}():\n    # AI failed: {str(e)}\n    pass\n\n"
 
 def generate_skeletons():
-    src_dir = "src"
-    test_dir = "tests"
+    src_dir = os.path.join(project_root, "src")
+    test_dir = os.path.join(project_root, "tests")
     
     if not os.path.exists(test_dir):
         os.makedirs(test_dir)
@@ -50,60 +67,59 @@ def generate_skeletons():
     for filename in os.listdir(src_dir):
         if filename.endswith(".py") and not filename.startswith("__"):
             module_name = filename[:-3]
-            test_filename = f"test_{module_name}.py"
-            test_path = os.path.join(test_dir, test_filename)
+            test_path = os.path.join(test_dir, f"test_{module_name}.py")
             
-            existing_tests = ""
+            existing_content = ""
             if os.path.exists(test_path):
-                with open(test_path, "r") as f:
-                    existing_tests = f.read()
+                try:
+                    with open(test_path, "r", encoding="utf-8") as f:
+                        existing_content = f.read()
+                except UnicodeDecodeError:
+                    with open(test_path, "r", encoding="cp1252") as f:
+                        existing_content = f.read()
             
-            with open(os.path.join(src_dir, filename), "r") as f:
-                source_code = f.read()
-                tree = ast.parse(source_code)
+            try:
+                with open(os.path.join(src_dir, filename), "r", encoding="utf-8") as f:
+                    source_code = f.read()
+            except UnicodeDecodeError:
+                with open(os.path.join(src_dir, filename), "r", encoding="cp1252") as f:
+                    source_code = f.read()
             
-            if not existing_tests:
-                existing_tests = f"from src import {module_name}\n\n"
+            tree = ast.parse(source_code)
             
-            new_tests_found = False
+            updated_content = existing_content
+            if not updated_content.strip():
+                updated_content = f"from src import {module_name}\n\n"
+            
+            has_changes = False
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
                     test_func_name = f"def test_{node.name}():"
+                    # Check if test for this function is missing, a TODO, or a previous failure
+                    is_missing = test_func_name not in updated_content
+                    is_dummy = ("# TODO" in updated_content or "# AI failed" in updated_content) and test_func_name in updated_content
                     
-                    # We generate if it's missing OR if it's just a dummy/failed test
-                    should_generate = (test_func_name not in existing_tests) or \
-                                      ("# TODO" in existing_tests and test_func_name in existing_tests) or \
-                                      ("# AI failed" in existing_tests and test_func_name in existing_tests)
-                    
-                    if should_generate:
+                    if is_missing or is_dummy:
                         print(f"Generiere Test für {node.name}...")
-                        generated_code = get_ai_test_code(module_name, node.name, source_code)
+                        new_test = get_ai_test_code(module_name, node.name, source_code)
                         
-                        if test_func_name in existing_tests:
-                            # Replace the old block
-                            lines = existing_tests.splitlines()
-                            start_idx = -1
+                        if is_dummy:
+                            lines = updated_content.splitlines()
                             for i, line in enumerate(lines):
                                 if test_func_name in line:
-                                    start_idx = i
+                                    end_idx = i + 1
+                                    while end_idx < len(lines) and not lines[end_idx].strip().startswith("def "):
+                                        end_idx += 1
+                                    lines[i:end_idx] = [new_test.strip()]
+                                    updated_content = "\n".join(lines)
                                     break
-                            
-                            if start_idx != -1:
-                                end_idx = start_idx + 1
-                                # Look for end of function (next def or next test start)
-                                while end_idx < len(lines) and not lines[end_idx].strip().startswith("def "):
-                                    end_idx += 1
-                                
-                                lines[start_idx:end_idx] = [generated_code.strip()]
-                                existing_tests = "\n".join(lines)
-                                new_tests_found = True
                         else:
-                            existing_tests += "\n" + generated_code
-                            new_tests_found = True
+                            updated_content += "\n" + new_test
+                        has_changes = True
             
-            if new_tests_found:
-                with open(test_path, "w") as f:
-                    f.write(existing_tests.strip() + "\n")
+            if has_changes:
+                with open(test_path, "w", encoding="utf-8") as f:
+                    f.write(updated_content.strip() + "\n")
                 print(f"Datei aktualisiert: {test_path}")
 
 if __name__ == "__main__":
