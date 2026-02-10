@@ -16,7 +16,6 @@ client = None
 if API_KEY:
     try:
         client = genai.Client(api_key=API_KEY)
-        print(f"DEBUG: Gemini Client initialisiert (Key-Endung: {API_KEY[-4:]})")
     except Exception as e:
         print(f"Fehler bei der Initialisierung: {e}")
 else:
@@ -27,8 +26,6 @@ def get_ai_test_code(module_name, function_name, source_code):
         return f"def test_{function_name}():\n    # TODO: Implement test (Client/API Key missing)\n    pass\n\n"
 
     try:
-        # We'll use 2.0-flash as it's state-of-the-art and was in your debug list
-        # Fallback to 1.5-flash if needed
         model_name = 'gemini-2.5-flash'
         
         prompt = f"""
