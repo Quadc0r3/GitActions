@@ -1,42 +1,49 @@
 import os
 import ast
-from google import genai
-from dotenv import load_dotenv
+# Robust library import for different environments
+try:
+    from google import genai
+    USING_NEW_SDK = True
+except ImportError:
+    try:
+        import google.generativeai as genai
+        USING_NEW_SDK = False
+    except ImportError:
+        print("Fehler: Weder 'google-genai' noch 'google-generativeai' ist installiert.")
+        exit(1)
 
-# Load .env file for local testing
-load_dotenv()
-
-# Setup Gemini API using the new google-genai SDK
+# Setup Gemini API
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 client = None
+
 if API_KEY:
     try:
-        client = genai.Client(api_key=API_KEY)
+        if USING_NEW_SDK:
+            client = genai.Client(api_key=API_KEY)
+        else:
+            genai.configure(api_key=API_KEY)
+            client = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        print(f"Failed to initialize Gemini Client: {e}")
+        print(f"Fehler bei der Initialisierung: {e}")
 
 def get_ai_test_code(module_name, function_name, source_code):
-    if not client:
+    if not API_KEY:
         return f"def test_{function_name}():\n    # TODO: Implement test for {function_name}\n    pass\n\n"
-
-    prompt = f"""
-    Schreibe einen professionellen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'.
-    Hier ist der Quellcode des Moduls:
-    ```python
-    {source_code}
-    ```
-    Antworte NUR mit dem Python-Code für die Testfunktion. Keine Erklärungen, kein Markdown-Codeblock.
-    Verwende 'from src import {module_name}' für den Import.
-    Gehe davon aus, dass der Import 'from src import {module_name}' bereits am Dateianfang steht, falls du ihn nicht explizit mitschreibst.
-    Antworte wirklich NUR mit der Funktionsdefinition.
-    """
     
+    prompt = f"Schreibe einen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'. Code:\n{source_code}\nAntworte NUR mit dem Code."
+
     try:
-        # Im neuen SDK ist 'gemini-1.5-flash' der korrekte String (ohne models/)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt
-        )
+        if USING_NEW_SDK:
+            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+        else:
+            response = client.generate_content(prompt)
+        
+        test_code = response.text.strip()
+        if "```" in test_code:
+            test_code = test_code.split("```python")[-1].split("```")[0].strip()
+        return test_code + "\n\n"
+    except Exception as e:
+        return f"def test_{function_name}():\n    # AI failed: {e}\n    pass\n\n"
         test_code = response.text.strip()
         # Clean up potential markdown formatting if AI ignores instructions
         if "```" in test_code:
