@@ -1,8 +1,7 @@
 from src import calculator
 
 def test_add():
-    # TODO: Implement test for add
-    pass
+    assert calculator.add(2, 3) == 5
 
 def test_subtract():
     # TODO: Implement test for subtract
@@ -14,5 +13,9 @@ def test_multiply():
 
 def test_divide():
     # TODO: Implement test for divide
+    pass
+
+def test_modulo():
+    # TODO: Implement test for modulo
     pass
 
