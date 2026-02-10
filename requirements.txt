@@ -2,5 +2,5 @@ pytest
 bandit
 safety
 pdoc
-google-genai
+google-generativeai
 python-dotenv
