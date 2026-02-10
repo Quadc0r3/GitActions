@@ -1,24 +1,19 @@
 import os
 import ast
-import google.generativeai as genai
+from google import genai
 
-# Setup Gemini API
+# Setup Gemini API using the new google-genai SDK
 API_KEY = os.environ.get("GOOGLE_API_KEY")
+client = None
 if API_KEY:
-    genai.configure(api_key=API_KEY)
-    # Using the full model name or 'gemini-1.5-flash-latest' often resolves 404 errors
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-    except Exception:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        client = genai.Client(api_key=API_KEY)
+    except Exception as e:
+        print(f"Failed to initialize Gemini Client: {e}")
 
 def get_ai_test_code(module_name, function_name, source_code):
-    if not API_KEY:
+    if not client:
         return f"def test_{function_name}():\n    # TODO: Implement test for {function_name}\n    pass\n\n"
-    
-    # Debug: Check models if error persists
-    # models = [m.name for m in genai.list_models()]
-    # print(f"Available models: {models}")
 
     prompt = f"""
     Schreibe einen professionellen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'.
@@ -27,13 +22,18 @@ def get_ai_test_code(module_name, function_name, source_code):
     {source_code}
     ```
     Antworte NUR mit dem Python-Code für die Testfunktion. Keine Erklärungen, kein Markdown-Codeblock.
-    Verwende 'from src import {module_name}' für den Import, falls nötig, aber gehe davon aus, dass der Import bereits am Dateianfang steht.
+    Verwende 'from src import {module_name}' für den Import.
+    Gehe davon aus, dass der Import 'from src import {module_name}' bereits am Dateianfang steht, falls du ihn nicht explizit mitschreibst.
+    Antworte wirklich NUR mit der Funktionsdefinition.
     """
     
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt
+        )
         test_code = response.text.strip()
-        # Remove markdown code blocks if AI included them despite instructions
+        # Clean up potential markdown formatting if AI ignores instructions
         if "```" in test_code:
             test_code = test_code.split("```python")[-1].split("```")[0].strip()
         return test_code + "\n\n"
@@ -71,23 +71,41 @@ def generate_skeletons():
                 if isinstance(node, ast.FunctionDef):
                     test_func_name = f"def test_{node.name}():"
                     todo_marker = f"# TODO: Implement test for {node.name}"
+                    # Also check for AI failure messages to retry them
+                    error_marker = "# AI failed:"
                     
-                    # Generiere Test, wenn er fehlt ODER wenn nur ein TODO da ist
-                    if test_func_name not in existing_tests or todo_marker in existing_tests:
+                    if test_func_name not in existing_tests or todo_marker in existing_tests or error_marker in existing_tests:
                         print(f"Generating AI test for {node.name} in {module_name}...")
                         generated_code = get_ai_test_code(module_name, node.name, source_code)
                         
-                        if todo_marker in existing_tests:
-                            # Ersetze das TODO und das folgende 'pass'
-                            target = f"{test_func_name}\n    {todo_marker}\n    pass"
-                            existing_tests = existing_tests.replace(target, generated_code.strip())
+                        # Logic to replace old TODOs or failed tests
+                        if todo_marker in existing_tests or error_marker in existing_tests:
+                            # This is a bit simplified; for a robust tool we'd use a better parser
+                            # But for this demo, we'll try to find and replace the block
+                            lines = existing_tests.splitlines()
+                            start_line = -1
+                            for i, line in enumerate(lines):
+                                if line.strip() == test_func_name:
+                                    start_line = i
+                                    break
+                            
+                            if start_line != -1:
+                                # Find the end of this function (next def or empty line or end of file)
+                                end_line = start_line + 1
+                                while end_line < len(lines) and not lines[end_line].startswith("def") and not lines[end_line].startswith("from") and not lines[end_line].startswith("import"):
+                                    end_line += 1
+                                
+                                # Replace the lines from start_line to end_line
+                                lines[start_line:end_line] = [generated_code.strip()]
+                                existing_tests = "\n".join(lines) + "\n"
+                            else:
+                                new_tests += generated_code
                         else:
                             new_tests += generated_code
             
-            if new_tests or (existing_tests != (open(test_path).read() if os.path.exists(test_path) else "")):
-                mode = "w" # Wir schreiben die ganze Datei neu, wenn wir Ersetzungen vorgenommen haben
-                with open(test_path, mode) as f:
-                    f.write(existing_tests + new_tests)
+            if new_tests or "AI failed" in existing_tests: # Check if we still have failures or new ones
+                with open(test_path, "w") as f:
+                    f.write(existing_tests.strip() + "\n\n" + new_tests.strip() + "\n")
                 print(f"Updated {test_path}")
 
 if __name__ == "__main__":
