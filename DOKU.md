@@ -15,3 +15,6 @@ Multiplies two numbers and returns the result.
 ### Funktion: `divide`
 Divides a by b. Returns a float or an error message if b is 0.
 
+### Funktion: `modulo`
+Keine Dokumentation vorhanden.
+
