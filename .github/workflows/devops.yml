@@ -1,23 +1,18 @@
-name: code_automation
+name: complete_devops_demo
 
 on:
   push:
     branches: [ main, master ]
-    paths:
-      - 'src/**'
-      - 'scripts/**'
-      - '.github/workflows/automation.yml'
   workflow_dispatch:
 
 jobs:
-  automate:
+  devops:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Important for the commit action
+      
     steps:
     - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.head_ref }}
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -29,16 +24,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Generate Test Skeletons
+    - name: 1. Generate Tests (AI)
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       run: python scripts/generate_test_skeletons.py
       
-    - name: Generate Documentation
+    - name: 2. Generate Documentation
       run: python scripts/document_code.py
       
-    - name: Commit changes
+    - name: 3. Run Unit Tests (pytest)
+      run: pytest
+      
+    - name: 4. Security Scan (Bandit)
+      run: bandit -r src/
+      
+    - name: 5. Dependency Check (Safety)
+      run: safety check || echo "Safety check found issues."
+      
+    - name: 6. Auto-Commit Changes (Tests & Doku)
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
-        commit_message: "Auto-generated tests and documentation"
+        commit_message: "Automated update: Tests and Documentation"
         file_pattern: 'tests/*.py DOKU.md'
