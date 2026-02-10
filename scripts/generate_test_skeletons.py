@@ -62,14 +62,25 @@ def generate_skeletons():
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
                     test_func_name = f"def test_{node.name}():"
-                    if test_func_name not in existing_tests:
+                    todo_marker = f"# TODO: Implement test for {node.name}"
+                    
+                    # Generiere Test, wenn er fehlt ODER wenn nur ein TODO da ist
+                    if test_func_name not in existing_tests or todo_marker in existing_tests:
                         print(f"Generating AI test for {node.name} in {module_name}...")
-                        new_tests += get_ai_test_code(module_name, node.name, source_code)
+                        generated_code = get_ai_test_code(module_name, node.name, source_code)
+                        
+                        if todo_marker in existing_tests:
+                            # Ersetze das TODO und das folgende 'pass'
+                            target = f"{test_func_name}\n    {todo_marker}\n    pass"
+                            existing_tests = existing_tests.replace(target, generated_code.strip())
+                        else:
+                            new_tests += generated_code
             
-            if new_tests:
-                with open(test_path, "a" if existing_tests else "w") as f:
-                    f.write(new_tests)
-                print(f"Updated {test_path}" if existing_tests else f"Generated {test_path}")
+            if new_tests or (existing_tests != (open(test_path).read() if os.path.exists(test_path) else "")):
+                mode = "w" # Wir schreiben die ganze Datei neu, wenn wir Ersetzungen vorgenommen haben
+                with open(test_path, mode) as f:
+                    f.write(existing_tests + new_tests)
+                print(f"Updated {test_path}")
 
 if __name__ == "__main__":
     generate_skeletons()
