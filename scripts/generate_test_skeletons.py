@@ -6,11 +6,19 @@ import google.generativeai as genai
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 if API_KEY:
     genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Using the full model name or 'gemini-1.5-flash-latest' often resolves 404 errors
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+    except Exception:
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 def get_ai_test_code(module_name, function_name, source_code):
     if not API_KEY:
         return f"def test_{function_name}():\n    # TODO: Implement test for {function_name}\n    pass\n\n"
+    
+    # Debug: Check models if error persists
+    # models = [m.name for m in genai.list_models()]
+    # print(f"Available models: {models}")
 
     prompt = f"""
     Schreibe einen professionellen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'.
