@@ -29,7 +29,7 @@ def get_ai_test_code(module_name, function_name, source_code):
     try:
         # We'll use 2.0-flash as it's state-of-the-art and was in your debug list
         # Fallback to 1.5-flash if needed
-        model_name = 'gemini-2.0-flash'
+        model_name = 'gemini-2.5-flash'
         
         prompt = f"""
         Schreibe einen professionellen Pytest-Testfall für die Funktion '{function_name}' im Modul '{module_name}'.
