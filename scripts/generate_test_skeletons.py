@@ -28,6 +28,7 @@ def get_ai_test_code(module_name, function_name, source_code):
     """
     
     try:
+        # Im neuen SDK ist 'gemini-1.5-flash' der korrekte String (ohne models/)
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt
