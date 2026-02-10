@@ -6,6 +6,3 @@ Dieses Dokument wurde automatisch erstellt.
 ### Funktion: `add`
 Adds two numbers and returns the result.
 
-### Funktion: `sub`
-Subtracts two numbers and returns the result.
-
