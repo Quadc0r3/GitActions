@@ -1,6 +1,10 @@
 import os
 import ast
 from google import genai
+from dotenv import load_dotenv
+
+# Load .env file for local testing
+load_dotenv()
 
 # Setup Gemini API using the new google-genai SDK
 API_KEY = os.environ.get("GOOGLE_API_KEY")

@@ -3,3 +3,4 @@ bandit
 safety
 pdoc
 google-genai
+python-dotenv
