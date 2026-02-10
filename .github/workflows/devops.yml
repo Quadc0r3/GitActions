@@ -42,7 +42,9 @@ jobs:
       run: safety check || echo "Safety check found issues."
       
     - name: 6. Auto-Commit Changes (Tests & Doku)
+      if: always() # Zeige Ergebnisse auch wenn Tests fehlschlagen
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
         commit_message: "Automated update: Tests and Documentation"
         file_pattern: 'tests/*.py DOKU.md'
+        add_options: '--all'

@@ -41,6 +41,7 @@ def get_ai_test_code(module_name, function_name, source_code):
         1. Antworte NUR mit dem reinen Python-Code der Testfunktion. Keine Erklärungen.
         2. Verwende 'from src import {module_name}' am Anfang oder gehe davon aus, dass der Import bereits existiert.
         3. Nutze aussagekräftige 'assert' Statements.
+        4. WICHTIG: Falls du Gleitkommazahlen (Floats) testest, verwende 'pytest.approx' für die Vergleiche, um Precision-Fehler zu vermeiden (z.B. assert result == pytest.approx(0.3)).
         """
         
         response = client.models.generate_content(
@@ -89,7 +90,7 @@ def generate_skeletons():
             
             updated_content = existing_content
             if not updated_content.strip():
-                updated_content = f"from src import {module_name}\n\n"
+                updated_content = f"import pytest\nfrom src import {module_name}\n\n"
             
             has_changes = False
             for node in ast.walk(tree):
