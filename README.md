@@ -35,4 +35,8 @@ Läuft bei jedem `push`, der Änderungen im `src/`-Verzeichnis enthält.
 - **Commit & Push**: Schreibt die Änderungen automatisch zurück in dein Repository.
 
 ## Voraussetzungen
-Stelle sicher, dass die GitHub-Aktionen Schreibrechte haben (`Settings > Actions > General > Workflow permissions > Read and write permissions`).
+1. **GitHub Berechtigungen**: Stelle sicher, dass die GitHub-Aktionen Schreibrechte haben (`Settings > Actions > General > Workflow permissions > Read and write permissions`).
+2. **AI Test-Generierung (Optional)**: 
+   - Gehe zu [Google AI Studio](https://aistudio.google.com/) und erstelle einen kostenlosen API-Key für Gemini.
+   - Füge diesen Key in deinem GitHub Repository unter `Settings > Secrets and variables > Actions` als neues Secret namens `GOOGLE_API_KEY` hinzu.
+   - Ohne diesen Key werden weiterhin leere Test-Skelette (TODOs) erstellt.

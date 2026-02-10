@@ -2,3 +2,4 @@ pytest
 bandit
 safety
 pdoc
+google-generativeai
